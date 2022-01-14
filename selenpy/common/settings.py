@@ -32,6 +32,8 @@ VERBOSEDIGIT = 2
 
 PROGRESSLEN = 25
 
+SKIPERROR = True
+
 PRIVATE_PROXY = {
 # -------------- private proxy with authentication configuration ------------- #
     # 'username': '12345678',
