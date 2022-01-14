@@ -129,6 +129,5 @@ dmypy.json
 .pyre/
 
 config/
-main.py
 
 selenpy/dump/proxy_auth_plugin.zip
