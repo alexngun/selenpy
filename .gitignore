@@ -131,4 +131,4 @@ dmypy.json
 config/
 main.py
 
-selenpy/dump/proxy_auth_plugin.zip/
+selenpy/dump/proxy_auth_plugin.zip
