@@ -1,4 +1,4 @@
-from main import SPIDER
+from demo import SPIDER
 from selenpy.DBManger import MongoManger
 from selenpy.formatoutput import Loader
 import sys

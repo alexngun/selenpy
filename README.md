@@ -63,7 +63,7 @@ Below is the methods that can be specified
 
 For more details, please find an example in `demo.py` for Amazon products crawling.
 
-####Proxy
+#### Proxy
 For setting up proxy, please define a class named as `Proxy` inside your own crawler class.
 ```python
     from selenpy.Crawler import BaseCrawler
