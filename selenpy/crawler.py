@@ -1,4 +1,4 @@
-#%%
+# %%
 from .common.settings import BROWSER, LOGGER
 from .common.variables import Mode
 from .DBManger import MongoManger
@@ -15,7 +15,9 @@ from pymongo.errors import DuplicateKeyError
 
 init(autoreset=True)
 
-#%%
+# %%
+
+
 class BaseCrawler():
 
     collection = "untitled"
@@ -27,7 +29,7 @@ class BaseCrawler():
     fURL = "%s"
 
     log_source = False
-    
+
     class Proxy:
         proxies = None
         type = Mode.LOCAL
@@ -51,25 +53,29 @@ class BaseCrawler():
         # ------------------------ eliminate duplicate targets ----------------------- #
         targets = list(set(self.targets))
         self.total = len(targets)
-
         done = []
-        logged = self.db.get(col=self.collection, column={"_id":1})
-        errored = self.db.get(col=f'{LOGGER}-{self.collection}', column={"_id":1})
-        for doc in logged:
-            done.append(doc['_id'])
-        for doc in errored:
-            done.append(doc['_id'])
+
+        if self.db.active:
+            logged = self.db.get(col=self.collection, column={"_id": 1})
+            errored = self.db.get(
+                col=f'{LOGGER}-{self.collection}', column={"_id": 1})
+            for doc in logged:
+                done.append(doc['_id'])
+            for doc in errored:
+                done.append(doc['_id'])
 
         # -------------------------------- slice tasks ------------------------------- #
         self.targets = list(set(targets[start:end])-set(done))
         self.tasks_num = len(self.targets)
-        self.loader.end(f"✅ Initializaion completed - {self.tasks_num} of {self.total} new tasks were pushed to the pool.\n")
+        self.loader.end(
+            f"✅ Initializaion completed - {self.tasks_num} of {self.total} new tasks were pushed to the pool.\n")
         print(f"\r☕ {self.total - self.tasks_num} records found in database")
-        # ------------------------------- load proxies ------------------------------- #
 
-        if self.Proxy.proxies:
+        # ------------------------------- load proxies ------------------------------- #
+        if self.db.active and self.Proxy.proxies:
             self.db.proxy.loadProxy(self.Proxy.proxies, self.Proxy.type)
-            size = len(self.db.get("proxy", filter={"status":"A", "type":self.Proxy.type}))
+            size = len(self.db.get("proxy", filter={
+                       "status": "A", "type": self.Proxy.type}))
             print(f"💻 {size} proxies currently available")
 
     @abstractmethod
@@ -91,24 +97,26 @@ class BaseCrawler():
 
                 target = self.targets.pop(0)
 
-                num = self.db.count(self.collection) + self.db.count(f'{LOGGER}-{self.collection}')
-                self.loader.displayProgress(num, self.total, 
-                    f"⏳ Thread {thread+1} -> {target} ({self.chromes[thread].proxy}) "
-                )
+                if self.db.active:
+                    num = self.db.count(self.collection) + \
+                        self.db.count(f'{LOGGER}-{self.collection}')
+                    self.loader.displayProgress(num, self.total,
+                                                f"⏳ Thread {thread+1} -> {target} ({self.chromes[thread].proxy}) "
+                                                )
 
                 if not self.validateTask(target):
                     self.logError(target, f'InvalidTaskPattern: {target}')
                     continue
-                
-                if self.db.exists(self.collection, target):
+
+                if self.db.active and self.db.exists(self.collection, target):
                     continue
 
-                if self.db.exists(f"{LOGGER}-{self.collection}", target):
+                if self.db.active and self.db.exists(f"{LOGGER}-{self.collection}", target):
                     continue
 
                 while True:
 
-                    if self.chromes[thread].get(url=self.fURL % target ):
+                    if self.chromes[thread].get(url=self.fURL % target):
                         break
                     else:
                         self.chromes[thread].quit()
@@ -121,27 +129,46 @@ class BaseCrawler():
                 time.sleep(BROWSER['delay'])
 
                 if not self.validatePage(self.chromes[thread]):
-                    self.logError(target, f'PageNotFound: {self.fURL % target}')
+                    self.logError(
+                        target, f'PageNotFound: {self.fURL % target}')
                     continue
 
-                if self.log_source:
+                if self.db.active & self.log_source:
                     self.db(f"{self.collection}-source", {
-                        "_id":target,
-                        "page":self.chromes[thread].page_source
+                        "_id": target,
+                        "page": self.chromes[thread].page_source
                     })
 
                 data = self.spider(self.chromes[thread], target)
-                self.db.insert(self.collection, data)
-            
+
+                if self.db.active:
+                    self.db.insert(self.collection, data)
+                else:
+                    return data
+
     def startChrome(self, thread):
 
         while True:
-            num = self.db.count(self.collection) + self.db.count(f'{LOGGER}-{self.collection}')
-            self.loader.displayProgress(num, self.total, f'⏳ Thread {thread+1} -> starting chrome ')
-            chrome = Chrome (
-                validate=self.validateBlock, proxymanager=self.db.proxy,
-                type=self.Proxy.type, headless=self.headless, enable_image=self.enable_image
+            if self.db.active:
+                num = self.db.count(self.collection) + \
+                    self.db.count(f'{LOGGER}-{self.collection}')
+            else:
+                num = 0
+
+            self.loader.displayProgress(
+                num, self.total, f'⏳ Thread {thread+1} -> starting chrome '
             )
+            if self.db.active:
+                chrome = Chrome(
+                    validate=self.validateBlock, proxymanager=self.db.proxy,
+                    type=self.Proxy.type, headless=self.headless, enable_image=self.enable_image
+                )
+            else:
+                chrome = Chrome(
+                    validate=self.validateBlock,
+                    type=self.Proxy.type, headless=self.headless, enable_image=self.enable_image
+                )
+
             if chrome.get(self.domain):
                 chrome.loadCookiesNlocalStorage()
                 return chrome
@@ -153,8 +180,8 @@ class BaseCrawler():
     def logError(self, id, message):
         try:
             self.db.insert(f'{LOGGER}-{self.collection}', {
-                '_id':id,
-                'error':message
+                '_id': id,
+                'error': message
             })
         except DuplicateKeyError:
             pass
@@ -165,14 +192,18 @@ class BaseCrawler():
         self.loader.indicateLoading()
 
         if self.threads == 1 or len(self.targets) < self.threads:
-            self.__crawl(thread=0)
+            print(self.__crawl(thread=0))
         else:
             with ThreadPoolExecutor(max_workers=self.threads) as executor:
                 for thread in range(self.threads):
-                    executor.submit(self.__crawl, thread)
+                    something = executor.submit(self.__crawl, thread)
+                    print(something)
 
-        num = self.db.count(self.collection) + self.db.count(f'{LOGGER}-{self.collection}')
-        self.loader.end(Style.DIM + Fore.CYAN + f"✅ All Done - total number of {num} tasks were fetched")
+        if self.db.active:
+            num = self.db.count(self.collection) + \
+                self.db.count(f'{LOGGER}-{self.collection}')
+            self.loader.end(Style.DIM + Fore.CYAN +
+                            f"✅ All Done - total number of {num} tasks were fetched")
 
     def validateBlock(self, chrome):
         return True

@@ -1,4 +1,4 @@
-#%%
+# %%
 import pymongo
 from .common.settings import DATABASE
 from .common.variables import dbMessage
@@ -8,20 +8,29 @@ import socket
 from pymongo.errors import DuplicateKeyError
 import random
 
+
 class MongoManger(object):
 
-    def __init__(self, 
-        database=DATABASE['db'],
-        host=f"{DATABASE['host']}:{DATABASE['port']}",
-        username=DATABASE['username'],
-        password=DATABASE['password']
-    ):
+    def __init__(self,
+                 database=DATABASE['db'],
+                 host=f"{DATABASE['host']}:{DATABASE['port']}",
+                 username=DATABASE['username'],
+                 password=DATABASE['password'],
+                 uri=DATABASE['uri']
+                 ):
+
+        if not DATABASE['host']:
+            self.active = False
+            return
 
         self.host = host
         self.proxy = ProxyManager(db=self)
 
-        if username and password:
-            self.client = pymongo.MongoClient(f'mongodb://{username}:{password}@{host}/')
+        if uri:
+            self.client = pymongo.MongoClient(uri)
+        elif username and password:
+            self.client = pymongo.MongoClient(
+                f'mongodb://{username}:{password}@{host}/')
         else:
             self.client = pymongo.MongoClient(f'mongodb://{self.host}/')
 
@@ -30,62 +39,63 @@ class MongoManger(object):
         self.status = self.client.server_info()
         try:
             print(dbMessage.serverOkwithAuth(
-                host, username, password[-3:], 
+                host, username, password[-3:],
                 self.status['buildEnvironment']['target_os'],
                 self.status['version']
             ))
         except TypeError:
             print(dbMessage.serverOk(
-                host, 
+                host,
                 self.status['buildEnvironment']['target_os'],
                 self.status['version']
             ))
 
-    def insertMany(self, col:str, items:list):
+    def insertMany(self, col: str, items: list):
         self.db[col].insert_many(items, ordered=False)
 
-    def insert(self, col:str, item:dict):
+    def insert(self, col: str, item: dict):
         self.db[col].insert_one(item)
 
-    #check if an id exists in a collection
-    def exists(self, col:str, id:str) -> bool:
-        return self.db[col].count_documents( {'_id':id}, limit = 1 )
+    # check if an id exists in a collection
+    def exists(self, col: str, id: str) -> bool:
+        return self.db[col].count_documents({'_id': id}, limit=1)
 
-    #check if an collection exists in the database
-    def colExists(self, col:str) -> bool:
+    # check if an collection exists in the database
+    def colExists(self, col: str) -> bool:
         return col in self.db.list_collection_names()
 
-    #count the number of documents in a collection
-    def count(self, col:str) -> int:
+    # count the number of documents in a collection
+    def count(self, col: str) -> int:
         return self.db[col].count()
 
-    #delete a record
-    def delete(self, col:str, id:str):
-        self.db[col].delete_one({'_id':id})
-    
-    #query records 
-    def get(self, col:str, filter={}, column={}) -> list :
-        return list(self.db[col].find(filter, column) )
+    # delete a record
+    def delete(self, col: str, id: str):
+        self.db[col].delete_one({'_id': id})
 
-    #update a record
-    def update(self, col:str, id:str, new_value):
+    # query records
+    def get(self, col: str, filter={}, column={}) -> list:
+        return list(self.db[col].find(filter, column))
+
+    # update a record
+    def update(self, col: str, id: str, new_value):
         self.db[col].update_one(
-            { "_id":id },
-            { "$set": new_value }
+            {"_id": id},
+            {"$set": new_value}
         )
 
-    #update many records
-    def updateMany(self, col:str, new_value, filter={}):
+    # update many records
+    def updateMany(self, col: str, new_value, filter={}):
         self.db[col].update_many(filter, new_value)
 
-    def dropAll(self, col:str):
+    def dropAll(self, col: str):
         self.db[col].delete_many({})
+
 
 class ProxyManager():
 
     def __init__(self, db):
         self.db = db
-        
+
     def fetchProxy():
         return []
 
@@ -119,47 +129,49 @@ class ProxyManager():
                     type = Mode.DEFAULT
 
             try:
-                self.db.insert("proxy",{
-                    '_id':host,
-                    'region':region,
-                    'status':"A",
-                    'type':type,
+                self.db.insert("proxy", {
+                    '_id': host,
+                    'region': region,
+                    'status': "A",
+                    'type': type,
                 })
                 count += 1
             except DuplicateKeyError:
                 self.db.update("proxy", host, {
-                    'region':region,
-                    'status':"A",
-                    'type':type,
+                    'region': region,
+                    'status': "A",
+                    'type': type,
                 })
 
         print(f"\r💾 {count} proxies loaded")
 
     def getProxy(self, type=Mode.LOCAL):
 
-        #if no proxy
-        if type==Mode.LOCAL:
+        # if no proxy
+        if type == Mode.LOCAL:
             return Mode.LOCAL
-        #if proxies
+        # if proxies
         else:
-            proxies = list(self.db.get("proxy", filter={"status":"A", "type":f"{type}"}))
+            proxies = list(self.db.get("proxy", filter={
+                           "status": "A", "type": f"{type}"}))
 
-            #try to obtain one proxy
+            # try to obtain one proxy
             try:
                 proxy = proxies[random.randint(0, len(proxies))]["_id"]
-            #if running out, return no proxy
+            # if running out, return no proxy
             except IndexError:
                 return Mode.LOCAL
-            #mark proxy as using
+            # mark proxy as using
             else:
-                self.db.update(col="proxy", id=proxy, new_value={"status":socket.gethostname()})
+                self.db.update(col="proxy", id=proxy, new_value={
+                               "status": socket.gethostname()})
                 return proxy
 
     def resetProxies(self):
-        self.db.updateMany("proxy", { "$set": {"status":"A"}})
+        self.db.updateMany("proxy", {"$set": {"status": "A"}})
 
     def releaseProxy(self, proxy):
-        self.db.update(col="proxy", id=proxy, new_value={"status":"A"})
+        self.db.update(col="proxy", id=proxy, new_value={"status": "A"})
 
     def removeProxy(self, proxy):
         self.db.delete("proxy", proxy)

@@ -1,13 +1,14 @@
 DATABASE = {
-    'host': '192.168.2.94',
-    'port': '27017',
-    'username': None, #'data'
-    'password': None, #'cafl-2021'
-    'db': 'test'
+    'host': None,
+    'port': None,
+    'username': None,  # 'data'
+    'password': None,  # 'cafl-2021'
+    'db': None,
+    'uri': None,
 }
 
 BROWSER = {
-    #broswer settings
+    # broswer settings
     'options': [
         "--no-sandbox",
         "--dns-prefetch-disable",
@@ -16,13 +17,13 @@ BROWSER = {
         "--disable-infobars",
         "enable-automation"
     ],
-    #delay,
-    'delay':0,
-    #waiting time to restart chrome after blocked by Amazon
+    # delay,
+    'delay': 0,
+    # waiting time to restart chrome after blocked by Amazon
     'waitInterval': 10,
-    #wait for web element
+    # wait for web element
     'elementTimeout': 0.5,
-    #browser loading timeout
+    # browser loading timeout
     'browserTimeout': 180,
 }
 
@@ -35,7 +36,7 @@ PROGRESSLEN = 25
 SKIPERROR = True
 
 PRIVATE_PROXY = {
-# -------------- private proxy with authentication configuration ------------- #
+    # -------------- private proxy with authentication configuration ------------- #
     # 'username': '12345678',
     # 'password': '12345678',
     "manifest_json": """
@@ -87,5 +88,5 @@ PRIVATE_PROXY = {
                     {urls: ["<all_urls>"]},
                     ['blocking']
         );
-    """ 
+    """
 }
